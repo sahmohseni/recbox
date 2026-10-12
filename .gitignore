@@ -1,12 +1,15 @@
 # Gradle and Android build output
 .gradle/
+**/.gradle/
 **/build/
+build/
 captures/
 
 # Local machine configuration
 local.properties
 **/local.properties
 .idea/
+**/.idea/
 *.iml
 .vscode/
 
