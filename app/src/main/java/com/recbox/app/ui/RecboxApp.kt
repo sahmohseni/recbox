@@ -8,6 +8,13 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +66,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,6 +82,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
@@ -125,7 +134,6 @@ private object Routes {
     const val CallActive = "call_active"
     const val CallPreview = "call_preview"
     const val Library = "library"
-    const val Settings = "settings"
     const val Recording = "recording/{mode}"
 }
 
@@ -287,7 +295,6 @@ fun RecboxApp(
                 HomeScreen(
                     onModeSelected = ::requestRecording,
                     onLibrary = { navController.navigate(Routes.Library) },
-                    onSettings = { navController.navigate(Routes.Settings) },
                 )
             }
             composable(Routes.VideoSetup) {
@@ -380,13 +387,6 @@ fun RecboxApp(
             composable(Routes.Library) {
                 LibraryScreen(
                     onHome = { navController.navigate(Routes.Home) { popUpTo(navController.graph.findStartDestination().id) } },
-                )
-            }
-            composable(Routes.Settings) {
-                SettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    onHome = { navController.navigate(Routes.Home) { popUpTo(navController.graph.findStartDestination().id) } },
-                    onLibrary = { navController.navigate(Routes.Library) },
                 )
             }
             composable(Routes.Recording) {
@@ -583,29 +583,105 @@ private fun NotificationToggleCard(
     disabledDescription: String,
     onEnabledChange: (Boolean) -> Unit,
 ) {
-    val statusColor = if (enabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+    val blueAccent = Color(0xFF3B82F6)
+
+    // Animated splash/pulse effect runs only when disabled to attract user attention
+    val infiniteTransition = rememberInfiniteTransition(label = "NotificationCardPulse")
+    val animatedAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.10f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseAlpha",
+    )
+    val animatedScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.025f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseScale",
+    )
+
+    val pulseScale = if (!enabled) animatedScale else 1.0f
+    val containerAlpha = if (!enabled) animatedAlpha else 0.18f
+    val borderColor = if (!enabled) blueAccent.copy(alpha = animatedAlpha + 0.3f) else blueAccent.copy(alpha = 0.7f)
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = pulseScale
+                scaleY = pulseScale
+            },
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (enabled) MaterialTheme.colorScheme.secondary.copy(alpha = .12f) else MaterialTheme.colorScheme.surface,
+            containerColor = blueAccent.copy(alpha = containerAlpha),
         ),
-        border = if (enabled) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = .55f)) else null,
+        border = BorderStroke(
+            width = if (enabled) 1.5.dp else 1.dp,
+            color = borderColor,
+        ),
     ) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = statusColor, modifier = Modifier.size(25.dp))
-            Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                Text(if (enabled) "اعلان فعال است" else title, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text(if (enabled) enabledDescription else disabledDescription, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 3.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(blueAccent.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = blueAccent,
+                    modifier = Modifier.size(24.dp),
+                )
             }
-            Switch(checked = enabled, onCheckedChange = onEnabledChange)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp),
+            ) {
+                Text(
+                    text = if (enabled) "اعلان فعال است" else title,
+                    color = blueAccent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (enabled) enabledDescription else disabledDescription,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = blueAccent,
+                    uncheckedThumbColor = blueAccent,
+                    uncheckedTrackColor = blueAccent.copy(alpha = 0.25f),
+                ),
+            )
         }
     }
 }
 
 @Composable
 private fun VideoOptionCard(title: String, subtitle: String, selected: Boolean, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .18f) else MaterialTheme.colorScheme.surface), border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .18f) else MaterialTheme.colorScheme.surface), border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -904,10 +980,10 @@ private fun AudioPreviewScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun HomeScreen(onModeSelected: (RecordingMode) -> Unit, onLibrary: () -> Unit, onSettings: () -> Unit) {
+private fun HomeScreen(onModeSelected: (RecordingMode) -> Unit, onLibrary: () -> Unit) {
     Scaffold(bottomBar = { BottomNav(selected = 0, onHome = {}, onLibrary = onLibrary) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).then(pagePadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item { Spacer(Modifier.height(12.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Column { Text("عصر بخیر", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp); Text("ضبط‌های شما ✦", fontSize = 23.sp, fontWeight = FontWeight.Bold) }; IconButton(onClick = onSettings) { Text("⚙", fontSize = 23.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
+            item { Spacer(Modifier.height(12.dp)); Column { Text("عصر بخیر", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp); Text("ضبط‌های شما ✦", fontSize = 23.sp, fontWeight = FontWeight.Bold) } }
             item { PrivacyPill() }
             item { HeroCard() }
             item { SectionTitle("ضبط جدید", "۴ حالت") }
@@ -1006,13 +1082,6 @@ private fun LibraryScreen(onHome: () -> Unit) {
 }
 
 @Composable
-private fun SettingsScreen(onBack: () -> Unit, onHome: () -> Unit, onLibrary: () -> Unit) {
-    Scaffold(bottomBar = { BottomNav(selected = -1, onHome = onHome, onLibrary = onLibrary) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding).then(pagePadding), verticalArrangement = Arrangement.spacedBy(8.dp)) { item { Spacer(Modifier.height(18.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { PageHeader("کنترل و تنظیمات", "تنظیمات"); IconButton(onClick = onBack) { Icon(Icons.Default.Close, null) } } }; item { SettingsGroup("ضبط و حریم خصوصی", listOf("مجوزهای دسترسی" to "دوربین، میکروفون و اعلان‌ها", "نشانگر ضبط" to "نمایش وضعیت هنگام ضبط", "کیفیت ضبط" to "بالا · فضای ذخیره‌سازی بهینه")) }; item { SettingsGroup("عمومی", listOf("حالت تاریک" to "فعال", "راهنما و پشتیبانی" to "پاسخ به پرسش‌های شما")) } }
-    }
-}
-
-@Composable
 private fun RecordingScreen(mode: RecordingMode, seconds: Long, paused: Boolean, onPause: () -> Unit, onStop: () -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(22.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onClose) { Icon(Icons.Default.Close, null) }; Text(if (paused) "ضبط متوقف" else "●  در حال ضبط", color = MaterialTheme.colorScheme.secondary, fontSize = 12.sp); IconButton(onClick = {}) { Icon(Icons.Default.MoreVert, null) } }; Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { Text(mode.label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp); Text(formatDuration(seconds), fontSize = 45.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(vertical = 20.dp)); Text("〰〰〰〰〰〰〰", color = MaterialTheme.colorScheme.primary, fontSize = 23.sp); Text("●  ضبط در پس‌زمینه فعال است", color = MaterialTheme.colorScheme.secondary, fontSize = 10.sp, modifier = Modifier.padding(top = 30.dp)); Spacer(Modifier.weight(1f)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onPause) { Icon(if (paused) Icons.Default.PlayArrow else Icons.Default.Pause, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }; IconButton(onClick = onStop, modifier = Modifier.size(74.dp).clip(CircleShape).background(Color(0xFFEF6F7F))) { Icon(Icons.Default.Stop, null, tint = Color.White, modifier = Modifier.size(30.dp)) }; IconButton(onClick = {}) { Icon(Icons.Default.Archive, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
 }
@@ -1063,10 +1132,10 @@ private fun ArchiveRow(item: ArchivedMedia, saved: Boolean, onOpen: () -> Unit, 
         }
     }
 }
+
 @Composable private fun BottomNav(selected: Int, onHome: () -> Unit, onLibrary: () -> Unit) { NavigationBar(containerColor = MaterialTheme.colorScheme.background) { NavigationBarItem(selected == 0, onHome, icon = { Icon(Icons.Default.Home, null) }, label = { Text("خانه", fontSize = 9.sp) }); NavigationBarItem(selected == 1, onLibrary, icon = { Icon(Icons.Default.Archive, null) }, label = { Text("آرشیو", fontSize = 9.sp) }) } }
 @Composable private fun PageHeader(eyebrow: String, title: String) { Column { Text(eyebrow, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp); Text(title, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp)) } }
 @Composable private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit = {}) { Surface(modifier = Modifier.clickable(onClick = onClick), color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(10.dp)) { Text(text, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp)) } }
-@Composable private fun SettingsGroup(title: String, rows: List<Pair<String, String>>) { Column { Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(start = 5.dp, bottom = 4.dp)); rows.forEach { (name, description) -> Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(31.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = .13f)), contentAlignment = Alignment.Center) { Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp)) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text(name, fontSize = 11.sp); Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, modifier = Modifier.padding(top = 3.dp)) }; Text("‹", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 20.sp) } } } }
 private fun formatDuration(seconds: Long): String { val h = seconds / 3600; val m = (seconds % 3600) / 60; val s = seconds % 60; return if (h > 0) "%02d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s) }
 private fun formatArchiveDate(millis: Long): String = SimpleDateFormat("yyyy/MM/dd · HH:mm", Locale("fa", "IR")).format(Date(millis))
 private fun formatFileSize(bytes: Long): String = when {
