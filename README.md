@@ -85,3 +85,4 @@ SettingsScreen
 این خطا معمولاً زمانی دیده می‌شود که Android Studio پروژه را با Gradle سیستم یا نسخه‌ی نامتناسب باز کند. wrapper پروژه روی Gradle 8.9 تنظیم شده است؛ پروژه را از پوشه‌ی ریشه باز کنید، در تنظیمات Gradle گزینه‌ی `Gradle wrapper` را انتخاب کنید و سپس `Sync Project with Gradle Files` را اجرا کنید. ماژول `app` را به‌عنوان پروژه‌ی مستقل باز نکنید.
 # recbox
 # recbox
+# recbox
