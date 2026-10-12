@@ -5,8 +5,16 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +31,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
@@ -57,6 +66,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,6 +82,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
@@ -123,7 +134,6 @@ private object Routes {
     const val CallActive = "call_active"
     const val CallPreview = "call_preview"
     const val Library = "library"
-    const val Settings = "settings"
     const val Recording = "recording/{mode}"
 }
 
@@ -142,11 +152,12 @@ fun RecboxApp(
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
+    fun showStartedNotification(label: String) {
+        Toast.makeText(context, "$label شروع شد", Toast.LENGTH_SHORT).show()
+    }
     var activeMode by rememberSaveable { mutableStateOf(RecordingMode.AmbientAudio.name) }
     var recordingSeconds by rememberSaveable { mutableIntStateOf(0) }
     var isPaused by rememberSaveable { mutableStateOf(false) }
-    var videoSelection by remember { mutableStateOf<Pair<VideoLens, VideoQuality>?>(null) }
-    var photoSelection by remember { mutableStateOf<VideoLens?>(null) }
     var pendingCallContact by remember { mutableStateOf<ContactItem?>(null) }
     var pendingQuickStart by remember { mutableStateOf<QuickStartRequest?>(null) }
     val permissionsForMode = remember {
@@ -191,42 +202,11 @@ fun RecboxApp(
             if (granted) {
                 CallRecordingStore.clear(context)
                 CallRecordingService.start(context, contact)
+                showStartedNotification("ضبط مکالمه")
                 context.startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${contact.phoneNumber}")))
                 navController.navigate(Routes.CallActive)
             }
             pendingCallContact = null
-            pendingMode = null
-        } else if (photoSelection != null) {
-            val lens = photoSelection!!
-            val requestedPermissions = permissionsForMode(RecordingMode.Photo)
-            val granted = requestedPermissions.all { permission ->
-                permissions[permission] == true || ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-            }
-            if (granted) {
-                PhotoStore.clear(context)
-                activeMode = RecordingMode.Photo.name
-                recordingSeconds = 0
-                isPaused = false
-                RecordingForegroundService.startPhoto(context, lens)
-                navController.navigate(Routes.PhotoPreview)
-            }
-            photoSelection = null
-            pendingMode = null
-        } else if (videoSelection != null) {
-            val (lens, quality) = videoSelection!!
-            val requestedPermissions = permissionsForMode(RecordingMode.Video)
-            val granted = requestedPermissions.all { permission ->
-                permissions[permission] == true || ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-            }
-            if (granted) {
-                VideoRecordingStore.clear(context)
-                activeMode = RecordingMode.Video.name
-                recordingSeconds = 0
-                isPaused = false
-                RecordingForegroundService.startVideo(context, lens, quality)
-                navController.navigate(Routes.Recording.replace("{mode}", RecordingMode.Video.name))
-            }
-            videoSelection = null
             pendingMode = null
         } else {
             val requestedPermissions = permissionsForMode(pendingMode ?: RecordingMode.AmbientAudio)
@@ -238,6 +218,7 @@ fun RecboxApp(
                 recordingSeconds = 0
                 isPaused = false
                 RecordingForegroundService.start(context, mode)
+                showStartedNotification(mode.label)
                 navController.navigate("recording/${mode.name}")
             }
             pendingMode = null
@@ -314,7 +295,6 @@ fun RecboxApp(
                 HomeScreen(
                     onModeSelected = ::requestRecording,
                     onLibrary = { navController.navigate(Routes.Library) },
-                    onSettings = { navController.navigate(Routes.Settings) },
                 )
             }
             composable(Routes.VideoSetup) {
@@ -323,21 +303,6 @@ fun RecboxApp(
                     onQuickStartChange = { enabled, lens, quality ->
                         if (enabled) requestQuickStart(RecordingMode.Video, lens, quality)
                         else RecordingForegroundService.stop(context)
-                    },
-                    onStart = { lens, quality ->
-                        videoSelection = lens to quality
-                        val missing = permissionsForMode(RecordingMode.Video).filter {
-                            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-                        }
-                        if (missing.isEmpty()) {
-                            videoSelection = null
-                            VideoRecordingStore.clear(context)
-                            activeMode = RecordingMode.Video.name
-                            recordingSeconds = 0
-                            isPaused = false
-                            RecordingForegroundService.startVideo(context, lens, quality)
-                            navController.navigate(Routes.Recording.replace("{mode}", RecordingMode.Video.name))
-                        } else permissionLauncher.launch(missing.toTypedArray())
                     },
                 )
             }
@@ -348,21 +313,6 @@ fun RecboxApp(
                         if (enabled) requestQuickStart(RecordingMode.AmbientAudio)
                         else RecordingForegroundService.stop(context)
                     },
-                    onStart = {
-                        pendingMode = RecordingMode.AmbientAudio
-                        val missing = permissionsForMode(RecordingMode.AmbientAudio).filter {
-                            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-                        }
-                        if (missing.isEmpty()) {
-                            pendingMode = null
-                            AudioRecordingStore.clear(context)
-                            activeMode = RecordingMode.AmbientAudio.name
-                            recordingSeconds = 0
-                            isPaused = false
-                            RecordingForegroundService.start(context, RecordingMode.AmbientAudio)
-                            navController.navigate(Routes.Recording.replace("{mode}", RecordingMode.AmbientAudio.name))
-                        } else permissionLauncher.launch(missing.toTypedArray())
-                    },
                 )
             }
             composable(Routes.PhotoSetup) {
@@ -371,21 +321,6 @@ fun RecboxApp(
                     onQuickStartChange = { enabled, lens ->
                         if (enabled) requestQuickStart(RecordingMode.Photo, lens)
                         else RecordingForegroundService.stop(context)
-                    },
-                    onStart = { lens ->
-                        photoSelection = lens
-                        val missing = permissionsForMode(RecordingMode.Photo).filter {
-                            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-                        }
-                        if (missing.isEmpty()) {
-                            photoSelection = null
-                            PhotoStore.clear(context)
-                            activeMode = RecordingMode.Photo.name
-                            recordingSeconds = 0
-                            isPaused = false
-                            RecordingForegroundService.startPhoto(context, lens)
-                            navController.navigate(Routes.PhotoPreview)
-                        } else permissionLauncher.launch(missing.toTypedArray())
                     },
                 )
             }
@@ -429,6 +364,7 @@ fun RecboxApp(
                                 pendingCallContact = null
                                 CallRecordingStore.clear(context)
                                 CallRecordingService.start(context, contact)
+                                showStartedNotification("ضبط مکالمه")
                                 context.startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${contact.phoneNumber}")))
                                 navController.navigate(Routes.CallActive)
                             } else permissionLauncher.launch(missing.toTypedArray())
@@ -451,13 +387,6 @@ fun RecboxApp(
             composable(Routes.Library) {
                 LibraryScreen(
                     onHome = { navController.navigate(Routes.Home) { popUpTo(navController.graph.findStartDestination().id) } },
-                )
-            }
-            composable(Routes.Settings) {
-                SettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    onHome = { navController.navigate(Routes.Home) { popUpTo(navController.graph.findStartDestination().id) } },
-                    onLibrary = { navController.navigate(Routes.Library) },
                 )
             }
             composable(Routes.Recording) {
@@ -534,7 +463,6 @@ private fun WelcomeScreen(onContinue: () -> Unit) {
 private fun AudioSetupScreen(
     onBack: () -> Unit,
     onQuickStartChange: (Boolean) -> Unit,
-    onStart: () -> Unit,
 ) {
     var quickStartEnabled by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -560,22 +488,18 @@ private fun AudioSetupScreen(
                 Text("کیفیت صدا: AAC · ۱۲۸ کیلوبیت بر ثانیه", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
             }
         }
-        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("شروع سریع از اعلان", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("پس از بستن اپ، ضبط صدا را از اعلان شروع و متوقف کنید", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 17.sp)
-            }
-            Switch(
-                checked = quickStartEnabled,
-                onCheckedChange = { enabled ->
-                    quickStartEnabled = enabled
-                    onQuickStartChange(enabled)
-                },
-            )
-        }
-        Text("با فعال بودن اعلان، سرویس ضبط در پس‌زمینه اجرا می‌شود و صفحه‌ی گوشی می‌تواند خاموش باشد.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 19.sp)
+        NotificationToggleCard(
+            enabled = quickStartEnabled,
+            title = "اعلان شروع ضبط صدا",
+            enabledDescription = "اعلان فعال است؛ برای شروع ضبط، روی «شروع ضبط صدا» در اعلان بزنید.",
+            disabledDescription = "اعلان را فعال کنید تا بتوانید ضبط صدا را از اعلان شروع و متوقف کنید.",
+            onEnabledChange = { enabled ->
+                quickStartEnabled = enabled
+                onQuickStartChange(enabled)
+            },
+        )
         Spacer(Modifier.weight(1f))
-        PrimaryButton("شروع ضبط صدا", onStart)
+        Text("ضبط صدا فقط از طریق اعلان فعال شروع می‌شود.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
     }
 }
 
@@ -583,29 +507,31 @@ private fun AudioSetupScreen(
 private fun VideoSetupScreen(
     onBack: () -> Unit,
     onQuickStartChange: (Boolean, VideoLens, VideoQuality) -> Unit,
-    onStart: (VideoLens, VideoQuality) -> Unit,
 ) {
     var selectedLens by rememberSaveable { mutableStateOf(VideoLens.Back.name) }
     var selectedQuality by rememberSaveable { mutableStateOf(VideoQuality.FullHd.name) }
     var quickStartEnabled by rememberSaveable { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(22.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.Close, contentDescription = "بازگشت") }
             Text("تنظیم ضبط ویدیو", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
-        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("شروع سریع از اعلان", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("پس از بستن اپ، دوربین را از خود اعلان انتخاب کنید", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-            }
-            Switch(
-                checked = quickStartEnabled,
-                onCheckedChange = { enabled ->
-                    quickStartEnabled = enabled
-                    onQuickStartChange(enabled, VideoLens.valueOf(selectedLens), VideoQuality.valueOf(selectedQuality))
-                },
-            )
-        }
+        NotificationToggleCard(
+            enabled = quickStartEnabled,
+            title = "اعلان شروع ضبط ویدیو",
+            enabledDescription = "اعلان فعال است؛ دوربین جلو یا پشت را از دکمه‌های اعلان انتخاب کنید.",
+            disabledDescription = "اعلان را فعال کنید تا بتوانید ویدیو را از اعلان شروع کنید.",
+            onEnabledChange = { enabled ->
+                quickStartEnabled = enabled
+                onQuickStartChange(enabled, VideoLens.valueOf(selectedLens), VideoQuality.valueOf(selectedQuality))
+            },
+        )
         Text("دوربین موردنظر را انتخاب کنید", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
         VideoOptionCard(VideoLens.Back.label, "مناسب برای ضبط محیط", selectedLens == VideoLens.Back.name) { selectedLens = VideoLens.Back.name }
         VideoOptionCard(VideoLens.Front.label, "مناسب برای ضبط روبه‌رو", selectedLens == VideoLens.Front.name) { selectedLens = VideoLens.Front.name }
@@ -615,8 +541,7 @@ private fun VideoSetupScreen(
             VideoOptionCard(quality.label, if (quality == VideoQuality.Uhd) "مصرف باتری و فضای بیشتر" else "تعادل کیفیت و حجم فایل", selectedQuality == quality.name) { selectedQuality = quality.name }
         }
         Spacer(Modifier.weight(1f))
-        Text("ضبط با اعلان دائمی ادامه پیدا می‌کند و پس از خاموش شدن صفحه نیز فعال می‌ماند.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 19.sp)
-        PrimaryButton("شروع ضبط ویدیو", { onStart(VideoLens.valueOf(selectedLens), VideoQuality.valueOf(selectedQuality)) })
+        Text("ضبط ویدیو فقط از طریق اعلان فعال شروع می‌شود.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
     }
 }
 
@@ -624,7 +549,6 @@ private fun VideoSetupScreen(
 private fun PhotoSetupScreen(
     onBack: () -> Unit,
     onQuickStartChange: (Boolean, VideoLens) -> Unit,
-    onStart: (VideoLens) -> Unit,
 ) {
     var selectedLens by rememberSaveable { mutableStateOf(VideoLens.Back.name) }
     var quickStartEnabled by rememberSaveable { mutableStateOf(false) }
@@ -633,31 +557,131 @@ private fun PhotoSetupScreen(
             IconButton(onClick = onBack) { Icon(Icons.Default.Close, contentDescription = "بازگشت") }
             Text("تنظیم ثبت عکس", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
-        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("شروع سریع از اعلان", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("پس از بستن اپ، دوربین را از خود اعلان انتخاب کنید", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-            }
-            Switch(
-                checked = quickStartEnabled,
-                onCheckedChange = { enabled ->
-                    quickStartEnabled = enabled
-                    onQuickStartChange(enabled, VideoLens.valueOf(selectedLens))
-                },
-            )
-        }
+        NotificationToggleCard(
+            enabled = quickStartEnabled,
+            title = "اعلان شروع ثبت عکس",
+            enabledDescription = "اعلان فعال است؛ دوربین جلو یا پشت را از دکمه‌های اعلان انتخاب کنید.",
+            disabledDescription = "اعلان را فعال کنید تا بتوانید عکس را از اعلان ثبت کنید.",
+            onEnabledChange = { enabled ->
+                quickStartEnabled = enabled
+                onQuickStartChange(enabled, VideoLens.valueOf(selectedLens))
+            },
+        )
         Text("دوربین موردنظر را انتخاب کنید", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
         VideoOptionCard(VideoLens.Back.label, "دوربین اصلی گوشی", selectedLens == VideoLens.Back.name) { selectedLens = VideoLens.Back.name }
         VideoOptionCard(VideoLens.Front.label, "دوربین سلفی", selectedLens == VideoLens.Front.name) { selectedLens = VideoLens.Front.name }
         Spacer(Modifier.weight(1f))
-        Text("با لمس دکمه، یک عکس با دوربین انتخاب‌شده ثبت می‌شود.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-        PrimaryButton("ثبت عکس", { onStart(VideoLens.valueOf(selectedLens)) })
+        Text("ثبت عکس فقط از طریق اعلان فعال شروع می‌شود.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun NotificationToggleCard(
+    enabled: Boolean,
+    title: String,
+    enabledDescription: String,
+    disabledDescription: String,
+    onEnabledChange: (Boolean) -> Unit,
+) {
+    val blueAccent = Color(0xFF3B82F6)
+
+    // Animated splash/pulse effect runs only when disabled to attract user attention
+    val infiniteTransition = rememberInfiniteTransition(label = "NotificationCardPulse")
+    val animatedAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.10f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseAlpha",
+    )
+    val animatedScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.025f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseScale",
+    )
+
+    val pulseScale = if (!enabled) animatedScale else 1.0f
+    val containerAlpha = if (!enabled) animatedAlpha else 0.18f
+    val borderColor = if (!enabled) blueAccent.copy(alpha = animatedAlpha + 0.3f) else blueAccent.copy(alpha = 0.7f)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = pulseScale
+                scaleY = pulseScale
+            },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = blueAccent.copy(alpha = containerAlpha),
+        ),
+        border = BorderStroke(
+            width = if (enabled) 1.5.dp else 1.dp,
+            color = borderColor,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(blueAccent.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = blueAccent,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp),
+            ) {
+                Text(
+                    text = if (enabled) "اعلان فعال است" else title,
+                    color = blueAccent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (enabled) enabledDescription else disabledDescription,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = blueAccent,
+                    uncheckedThumbColor = blueAccent,
+                    uncheckedTrackColor = blueAccent.copy(alpha = 0.25f),
+                ),
+            )
+        }
     }
 }
 
 @Composable
 private fun VideoOptionCard(title: String, subtitle: String, selected: Boolean, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .18f) else MaterialTheme.colorScheme.surface), border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .18f) else MaterialTheme.colorScheme.surface), border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -956,10 +980,10 @@ private fun AudioPreviewScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun HomeScreen(onModeSelected: (RecordingMode) -> Unit, onLibrary: () -> Unit, onSettings: () -> Unit) {
+private fun HomeScreen(onModeSelected: (RecordingMode) -> Unit, onLibrary: () -> Unit) {
     Scaffold(bottomBar = { BottomNav(selected = 0, onHome = {}, onLibrary = onLibrary) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).then(pagePadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item { Spacer(Modifier.height(12.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Column { Text("عصر بخیر،", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp); Text("آرمان ✦", fontSize = 23.sp, fontWeight = FontWeight.Bold) }; IconButton(onClick = onSettings) { Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) { Text("آ", fontWeight = FontWeight.Bold) } } } }
+            item { Spacer(Modifier.height(12.dp)); Column { Text("عصر بخیر", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp); Text("ضبط‌های شما ✦", fontSize = 23.sp, fontWeight = FontWeight.Bold) } }
             item { PrivacyPill() }
             item { HeroCard() }
             item { SectionTitle("ضبط جدید", "۴ حالت") }
@@ -1058,13 +1082,6 @@ private fun LibraryScreen(onHome: () -> Unit) {
 }
 
 @Composable
-private fun SettingsScreen(onBack: () -> Unit, onHome: () -> Unit, onLibrary: () -> Unit) {
-    Scaffold(bottomBar = { BottomNav(selected = -1, onHome = onHome, onLibrary = onLibrary) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding).then(pagePadding), verticalArrangement = Arrangement.spacedBy(8.dp)) { item { Spacer(Modifier.height(18.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { PageHeader("پروفایل و کنترل", "تنظیمات"); IconButton(onClick = onBack) { Icon(Icons.Default.Close, null) } } }; item { ProfileCard() }; item { SettingsGroup("ضبط و حریم خصوصی", listOf("مجوزهای دسترسی" to "دوربین، میکروفون و اعلان‌ها", "نشانگر ضبط" to "نمایش وضعیت هنگام ضبط", "کیفیت ضبط" to "بالا · فضای ذخیره‌سازی بهینه")) }; item { SettingsGroup("عمومی", listOf("حالت تاریک" to "فعال", "راهنما و پشتیبانی" to "پاسخ به پرسش‌های شما")) } }
-    }
-}
-
-@Composable
 private fun RecordingScreen(mode: RecordingMode, seconds: Long, paused: Boolean, onPause: () -> Unit, onStop: () -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(22.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onClose) { Icon(Icons.Default.Close, null) }; Text(if (paused) "ضبط متوقف" else "●  در حال ضبط", color = MaterialTheme.colorScheme.secondary, fontSize = 12.sp); IconButton(onClick = {}) { Icon(Icons.Default.MoreVert, null) } }; Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { Text(mode.label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp); Text(formatDuration(seconds), fontSize = 45.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(vertical = 20.dp)); Text("〰〰〰〰〰〰〰", color = MaterialTheme.colorScheme.primary, fontSize = 23.sp); Text("●  ضبط در پس‌زمینه فعال است", color = MaterialTheme.colorScheme.secondary, fontSize = 10.sp, modifier = Modifier.padding(top = 30.dp)); Spacer(Modifier.weight(1f)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onPause) { Icon(if (paused) Icons.Default.PlayArrow else Icons.Default.Pause, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }; IconButton(onClick = onStop, modifier = Modifier.size(74.dp).clip(CircleShape).background(Color(0xFFEF6F7F))) { Icon(Icons.Default.Stop, null, tint = Color.White, modifier = Modifier.size(30.dp)) }; IconButton(onClick = {}) { Icon(Icons.Default.Archive, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
 }
@@ -1072,7 +1089,7 @@ private fun RecordingScreen(mode: RecordingMode, seconds: Long, paused: Boolean,
 @Composable private fun ScreenColumn(content: @Composable ColumnScope.() -> Unit) { Column(Modifier.fillMaxSize().then(pagePadding), content = content) }
 @Composable private fun Brand() { Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(11.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)); Spacer(Modifier.width(8.dp)); Text("RecBox", fontSize = 19.sp, fontWeight = FontWeight.Bold) } }
 @Composable private fun PrimaryButton(text: String, onClick: () -> Unit) { Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) { Text("$text  ←", fontWeight = FontWeight.Bold) } }
-@Composable private fun PrivacyPill() { Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.secondary.copy(alpha = .08f)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondary)); Spacer(Modifier.width(7.dp)); Text("حریم خصوصی فعال است", color = MaterialTheme.colorScheme.secondary, fontSize = 10.sp); Spacer(Modifier.weight(1f)); TextButton(onClick = {}) { Text("جزئیات", color = MaterialTheme.colorScheme.secondary, fontSize = 10.sp) } } }
+@Composable private fun PrivacyPill() { Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.secondary.copy(alpha = .08f)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondary)); Spacer(Modifier.width(7.dp)); Text("حریم خصوصی فعال است", color = MaterialTheme.colorScheme.secondary, fontSize = 10.sp) } }
 @Composable private fun HeroCard() { Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF26223E)), shape = RoundedCornerShape(24.dp)) { Column(Modifier.padding(20.dp)) { Text("کنترل کامل در دستان شما", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp); Text("چه چیزی را\nثبت کنیم؟", fontSize = 24.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp)); Text("یک حالت را انتخاب کنید تا شروع کنیم.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp)) } } }
 @Composable private fun SectionTitle(title: String, action: String, onClick: (() -> Unit)? = null) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold); TextButton(onClick = { onClick?.invoke() }, enabled = onClick != null) { Text(action, color = if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp) } } }
 @Composable private fun ModeCard(mode: RecordingMode, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: (RecordingMode) -> Unit, modifier: Modifier) { Card(onClick = { onClick(mode) }, modifier = modifier.height(118.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1E2B))) { Column(Modifier.padding(14.dp)) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(25.dp)); Spacer(Modifier.height(10.dp)); Text(mode.label, fontSize = 12.sp, fontWeight = FontWeight.Bold); Text(if (mode == RecordingMode.Video) "با صفحه خاموش" else "ثبت سریع", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, modifier = Modifier.padding(top = 3.dp)); Spacer(Modifier.weight(1f)); Icon(Icons.Default.KeyboardArrowLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp)) } } }
@@ -1115,11 +1132,10 @@ private fun ArchiveRow(item: ArchivedMedia, saved: Boolean, onOpen: () -> Unit, 
         }
     }
 }
+
 @Composable private fun BottomNav(selected: Int, onHome: () -> Unit, onLibrary: () -> Unit) { NavigationBar(containerColor = MaterialTheme.colorScheme.background) { NavigationBarItem(selected == 0, onHome, icon = { Icon(Icons.Default.Home, null) }, label = { Text("خانه", fontSize = 9.sp) }); NavigationBarItem(selected == 1, onLibrary, icon = { Icon(Icons.Default.Archive, null) }, label = { Text("آرشیو", fontSize = 9.sp) }) } }
 @Composable private fun PageHeader(eyebrow: String, title: String) { Column { Text(eyebrow, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp); Text(title, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp)) } }
 @Composable private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit = {}) { Surface(modifier = Modifier.clickable(onClick = onClick), color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(10.dp)) { Text(text, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp)) } }
-@Composable private fun ProfileCard() { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) { Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) { Text("آ", fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("آرمان رضایی", fontSize = 12.sp, fontWeight = FontWeight.Bold); Text("۰۹۱۲ ۱۲۳ ۴۵۶۷", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp)) }; Text("ویرایش", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp) } } }
-@Composable private fun SettingsGroup(title: String, rows: List<Pair<String, String>>) { Column { Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(start = 5.dp, bottom = 4.dp)); rows.forEach { (name, description) -> Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(31.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = .13f)), contentAlignment = Alignment.Center) { Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp)) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text(name, fontSize = 11.sp); Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, modifier = Modifier.padding(top = 3.dp)) }; Text("‹", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 20.sp) } } } }
 private fun formatDuration(seconds: Long): String { val h = seconds / 3600; val m = (seconds % 3600) / 60; val s = seconds % 60; return if (h > 0) "%02d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s) }
 private fun formatArchiveDate(millis: Long): String = SimpleDateFormat("yyyy/MM/dd · HH:mm", Locale("fa", "IR")).format(Date(millis))
 private fun formatFileSize(bytes: Long): String = when {
