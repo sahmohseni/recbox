@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10111a" />
+    <title>خاموش — پروتوتایپ اپلیکیشن ضبط هوشمند</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="stage">
+      <section class="phone-shell" aria-label="پروتوتایپ اپ خاموش">
+        <div class="status-bar">
+          <span>۹:۴۱</span>
+          <div class="status-icons"><span>ᯤ</span><span>ᯤ</span><span class="battery">۸۶٪</span></div>
+        </div>
+
+        <div class="app-view" id="appView">
+          <section class="screen active" id="screen-welcome">
+            <div class="welcome-glow"></div>
+            <div class="brand-mark large"><span class="brand-dot"></span><span>خاموش</span></div>
+            <div class="welcome-visual" aria-hidden="true">
+              <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+              <div class="visual-core"><span class="core-pulse"></span><span class="core-icon">◉</span></div>
+            </div>
+            <div class="welcome-copy">
+              <p class="eyebrow">لحظه‌ها، امن و بی‌صدا</p>
+              <h1>هر چیزی که مهم است،<br /><em>در لحظه ثبت کن.</em></h1>
+              <p>ضبط صدا، تصویر و تماس با کنترل کامل روی حریم خصوصی شما.</p>
+            </div>
+            <button class="primary-button wide" data-go="screen-home">شروع کنید <span>←</span></button>
+            <p class="microcopy">با ادامه دادن، <a href="#">شرایط استفاده</a> را می‌پذیرید.</p>
+          </section>
+
+          <section class="screen" id="screen-home">
+            <header class="topbar"><div><span class="greeting">عصر بخیر،</span><h2>آرمان <span class="wave">✦</span></h2></div><button class="avatar" data-go="screen-settings">آ</button></header>
+            <div class="privacy-pill"><span class="live-dot"></span><span>حریم خصوصی فعال است</span><button>جزئیات</button></div>
+            <div class="hero-card"><div class="hero-art"><span class="hero-orb orb-a"></span><span class="hero-orb orb-b"></span><span class="hero-ring"></span></div><div class="hero-copy"><span class="card-kicker">کنترل کامل در دستان شما</span><h1>چه چیزی را<br /><em>ثبت کنیم؟</em></h1><p>یک حالت را انتخاب کنید تا شروع کنیم.</p></div></div>
+            <div class="section-heading"><h3>ضبط جدید</h3><span>۴ حالت</span></div>
+            <div class="mode-grid">
+              <button class="mode-card audio" data-mode="audio"><span class="mode-icon">≈</span><span class="mode-title">صدای محیط</span><span class="mode-meta">ضبط صوتی</span><span class="mode-arrow">↙</span></button>
+              <button class="mode-card video" data-mode="video"><span class="mode-icon">◉</span><span class="mode-title">ویدیو</span><span class="mode-meta">ضبط با صفحه خاموش</span><span class="mode-arrow">↙</span></button>
+              <button class="mode-card photo" data-mode="photo"><span class="mode-icon">▣</span><span class="mode-title">عکس</span><span class="mode-meta">ثبت سریع تصویر</span><span class="mode-arrow">↙</span></button>
+              <button class="mode-card call" data-mode="call"><span class="mode-icon">⌕</span><span class="mode-title">مکالمه</span><span class="mode-meta">ضبط تماس‌ها</span><span class="mode-arrow">↙</span></button>
+            </div>
+            <div class="section-heading recent-heading"><h3>آخرین ضبط‌ها</h3><button class="text-button" data-go="screen-library">مشاهده همه</button></div>
+            <button class="recent-item" data-go="screen-library"><span class="recent-thumb audio-thumb">≈</span><span class="recent-info"><strong>یادداشت صوتی جدید</strong><small>امروز، ۱۸:۲۴ · ۰۳:۱۲</small></span><span class="more">•••</span></button>
+            <nav class="bottom-nav"><button class="nav-item active" data-nav="screen-home"><span>⌂</span><small>خانه</small></button><button class="nav-item" data-nav="screen-library"><span>▤</span><small>آرشیو</small></button><button class="nav-record" data-mode="audio"><span>+</span></button><button class="nav-item" data-nav="screen-settings"><span>⚙</span><small>تنظیمات</small></button></nav>
+          </section>
+
+          <section class="screen" id="screen-recording">
+            <header class="topbar recording-top"><button class="icon-button" data-go="screen-home">×</button><span class="recording-label"><span class="live-dot"></span>در حال ضبط</span><button class="icon-button">⋮</button></header>
+            <div class="recording-main"><span class="recording-mode" id="recordingMode">ضبط صدای محیط</span><div class="recording-time" id="recordingTime">۰۰:۰۰:۰۰</div><div class="waveform" aria-label="نمودار موج صدا"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="recording-status"><span>●</span> ضبط در پس‌زمینه فعال است</div></div>
+            <div class="recording-footer"><button class="recording-action secondary" id="pauseButton"><span>Ⅱ</span><small>مکث</small></button><button class="stop-button" id="stopButton"><span></span></button><button class="recording-action secondary"><span>⌁</span><small>نشان‌گذاری</small></button></div>
+          </section>
+
+          <section class="screen" id="screen-library">
+            <header class="page-header"><div><span class="eyebrow">کتابخانه شخصی</span><h2>آرشیو من</h2></div><button class="icon-button">⌕</button></header>
+            <div class="filter-tabs"><button class="active">همه <span>۱۲</span></button><button>صدا</button><button>ویدیو</button><button>عکس</button></div>
+            <div class="library-date">امروز، ۱۱ اکتبر</div>
+            <div class="library-list"><button class="library-item"><span class="library-icon audio-thumb">≈</span><span class="recent-info"><strong>یادداشت صوتی جدید</strong><small>۱۸:۲۴ · ضبط صدای محیط · ۰۳:۱۲</small></span><span class="more">•••</span></button><button class="library-item"><span class="library-icon video-thumb">◉</span><span class="recent-info"><strong>جلسه تیم محصول</strong><small>۱۵:۰۸ · ویدیو · ۲۲:۴۱</small></span><span class="more">•••</span></button><button class="library-item"><span class="library-icon photo-thumb">▣</span><span class="recent-info"><strong>رسید خرید</strong><small>۱۲:۳۵ · عکس · ۱ فایل</small></span><span class="more">•••</span></button></div>
+            <nav class="bottom-nav"><button class="nav-item" data-nav="screen-home"><span>⌂</span><small>خانه</small></button><button class="nav-item active" data-nav="screen-library"><span>▤</span><small>آرشیو</small></button><button class="nav-record" data-mode="audio"><span>+</span></button><button class="nav-item" data-nav="screen-settings"><span>⚙</span><small>تنظیمات</small></button></nav>
+          </section>
+
+          <section class="screen" id="screen-settings">
+            <header class="page-header"><div><span class="eyebrow">پروفایل و کنترل</span><h2>تنظیمات</h2></div><button class="icon-button" data-go="screen-home">×</button></header>
+            <div class="profile-card"><div class="profile-avatar">آ</div><div><strong>آرمان رضایی</strong><small>۰۹۱۲ ۱۲۳ ۴۵۶۷</small></div><button>ویرایش</button></div>
+            <div class="settings-group"><span class="group-label">ضبط و حریم خصوصی</span><button class="setting-row"><span class="setting-icon purple">♧</span><span><strong>مجوزهای دسترسی</strong><small>دوربین، میکروفون و اعلان‌ها</small></span><span>‹</span></button><button class="setting-row"><span class="setting-icon green">◉</span><span><strong>نشانگر ضبط</strong><small>نمایش وضعیت هنگام ضبط</small></span><span class="toggle on"><i></i></span></button><button class="setting-row"><span class="setting-icon orange">◌</span><span><strong>کیفیت ضبط</strong><small>بالا · فضای ذخیره‌سازی بهینه</small></span><span>‹</span></button></div>
+            <div class="settings-group"><span class="group-label">عمومی</span><button class="setting-row"><span class="setting-icon blue">◒</span><span><strong>حالت تاریک</strong><small>فعال</small></span><span class="toggle on"><i></i></span></button><button class="setting-row"><span class="setting-icon gray">?</span><span><strong>راهنما و پشتیبانی</strong><small>پاسخ به پرسش‌های شما</small></span><span>‹</span></button></div>
+            <button class="logout-button">خروج از حساب <span>↗</span></button>
+          </section>
+        </div>
+        <div class="toast" id="toast"><span>✓</span><span id="toastText">ذخیره شد</span></div>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

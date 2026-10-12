@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">RecBox</string>
+    <string name="recording_channel_name">وضعیت ضبط</string>
+    <string name="recording_channel_description">اعلان دائمی هنگام فعال بودن ضبط</string>
+    <string name="call_audio_accessibility_label">دسترسی ضبط صدای تماس RecBox</string>
+    <string name="call_audio_accessibility_description">برای دریافت صدای دوطرفه‌ی تماس، سرویس ضبط تماس را فعال می‌کند.</string>
+</resources>
