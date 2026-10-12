@@ -1,4 +1,33 @@
+# Gradle and Android build output
+.gradle/
+**/build/
+captures/
+
+# Local machine configuration
+local.properties
+**/local.properties
+.idea/
+*.iml
+.vscode/
+
+# Signing keys and signing configuration
 keystore.properties
 RELEASE_SIGNING_INFO.txt
-app/keystore/*.jks
-app/keystore/*.keystore
+keys/
+**/keystore/
+*.jks
+*.keystore
+
+# Generated Android packages
+*.apk
+*.aab
+*.apks
+app/release/
+
+# Kotlin/Java generated files
+*.class
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

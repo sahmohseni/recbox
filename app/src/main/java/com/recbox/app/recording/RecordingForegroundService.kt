@@ -292,8 +292,8 @@ class RecordingForegroundService : LifecycleService() {
                     .putExtra(EXTRA_QUALITY, armedQuality.name),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            builder.addAction(android.R.drawable.ic_media_play, if (armedForPhoto) "عکس با دوربین پشت" else "ویدیو با دوربین پشت", backCameraIntent)
-            builder.addAction(android.R.drawable.ic_media_play, if (armedForPhoto) "عکس با دوربین جلو" else "ویدیو با دوربین جلو", frontCameraIntent)
+            builder.addAction(android.R.drawable.ic_media_play, if (armedForPhoto) "دوربین پشت" else "دوربین پشت", backCameraIntent)
+            builder.addAction(android.R.drawable.ic_media_play, if (armedForPhoto) "دوربین جلو" else "دوربین جلو", frontCameraIntent)
             builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "خاموش‌کردن اعلان", disarmIntent)
         } else {
             builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "پایان ضبط", stopIntent)
