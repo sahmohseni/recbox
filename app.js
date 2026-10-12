@@ -27,6 +27,7 @@ function startRecording(mode) {
   window.clearInterval(timerInterval);
   timerInterval = window.setInterval(() => { elapsed += 1; updateRecordingTime(); }, 1000);
   showScreen('screen-recording');
+  notify(`${modeLabels[activeMode]} شروع شد`);
 }
 
 function updateRecordingTime() {

@@ -6,6 +6,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Compatibility task for IDEs that still request the legacy Kotlin model task.
+// Kotlin 2.x no longer creates it automatically, but the IDE only needs the
+// task to exist while importing the Gradle model.
+tasks.register("prepareKotlinBuildScriptModel") {
+    group = "ide"
+    description = "Provides the legacy Kotlin Gradle model entry point for IDE sync."
+}
+
 android {
     namespace = "com.recbox.app"
     compileSdk = 35
