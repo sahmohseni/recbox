@@ -1,0 +1,4 @@
+keystore.properties
+RELEASE_SIGNING_INFO.txt
+app/keystore/*.jks
+app/keystore/*.keystore

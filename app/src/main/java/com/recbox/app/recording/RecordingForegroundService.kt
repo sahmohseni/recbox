@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
@@ -59,23 +60,23 @@ class RecordingForegroundService : LifecycleService() {
                 armedForAudio = false
                 armedLens = intent.getStringExtra(EXTRA_LENS)?.let { VideoLens.valueOf(it) } ?: VideoLens.Back
                 armedQuality = intent.getStringExtra(EXTRA_QUALITY)?.let { VideoQuality.valueOf(it) } ?: VideoQuality.FullHd
-                startForeground(NOTIFICATION_ID, buildNotification("شروع سریع ویدیو", armed = true))
+                if (!promoteToForeground(buildNotification("شروع سریع ویدیو", armed = true), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)) return START_NOT_STICKY
             }
             ACTION_ARM_PHOTO -> {
                 armedForPhoto = true
                 armedForAudio = false
                 armedLens = intent.getStringExtra(EXTRA_LENS)?.let { VideoLens.valueOf(it) } ?: VideoLens.Back
-                startForeground(NOTIFICATION_ID, buildNotification("شروع سریع عکس", armed = true))
+                if (!promoteToForeground(buildNotification("شروع سریع عکس", armed = true), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)) return START_NOT_STICKY
             }
             ACTION_ARM_AUDIO -> {
                 armedForPhoto = false
                 armedForAudio = true
-                startForeground(NOTIFICATION_ID, buildNotification("شروع سریع صدای محیط", armed = true))
+                if (!promoteToForeground(buildNotification("شروع سریع صدای محیط", armed = true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)) return START_NOT_STICKY
             }
             ACTION_START_VIDEO -> {
                 armedForPhoto = false
                 armedForAudio = false
-                startForeground(NOTIFICATION_ID, buildNotification("ویدیو", armed = false))
+                if (!promoteToForeground(buildNotification("ویدیو", armed = false), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)) return START_NOT_STICKY
                 startVideo(
                     lens = intent.getStringExtra(EXTRA_LENS)?.let { VideoLens.valueOf(it) } ?: VideoLens.Back,
                     quality = intent.getStringExtra(EXTRA_QUALITY)?.let { VideoQuality.valueOf(it) } ?: VideoQuality.FullHd,
@@ -83,18 +84,18 @@ class RecordingForegroundService : LifecycleService() {
             }
             ACTION_START_PHOTO -> {
                 armedForAudio = false
-                startForeground(NOTIFICATION_ID, buildNotification("عکس", armed = false))
+                if (!promoteToForeground(buildNotification("عکس", armed = false), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)) return START_NOT_STICKY
                 startPhoto(intent.getStringExtra(EXTRA_LENS)?.let { VideoLens.valueOf(it) } ?: VideoLens.Back)
             }
             ACTION_START -> {
                 val label = intent.getStringExtra(EXTRA_MODE)?.let { value -> RecordingMode.entries.firstOrNull { it.name == value }?.label }
                     ?: RecordingMode.AmbientAudio.label
-                startForeground(NOTIFICATION_ID, buildNotification(label, armed = false))
+                if (!promoteToForeground(buildNotification(label, armed = false), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)) return START_NOT_STICKY
                 if (intent.getStringExtra(EXTRA_MODE) == RecordingMode.AmbientAudio.name) startAudio()
             }
             ACTION_START_AUDIO -> {
                 armedForAudio = false
-                startForeground(NOTIFICATION_ID, buildNotification(RecordingMode.AmbientAudio.label, armed = false))
+                if (!promoteToForeground(buildNotification(RecordingMode.AmbientAudio.label, armed = false), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)) return START_NOT_STICKY
                 startAudio()
             }
             ACTION_PAUSE -> activeRecording?.pause() ?: activeAudioRecorder?.pause()
@@ -360,6 +361,18 @@ class RecordingForegroundService : LifecycleService() {
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
+
+    private fun promoteToForeground(notification: Notification, foregroundServiceType: Int): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, foregroundServiceType)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }.onFailure {
+        // Android 14+ can reject a foreground-service type when a required
+        // runtime permission was revoked while the app was in the background.
+        stopSelf()
+    }.isSuccess
 
     companion object {
         private const val CHANNEL_ID = "recording_status"

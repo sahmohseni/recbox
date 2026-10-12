@@ -127,6 +127,12 @@ private object Routes {
     const val Recording = "recording/{mode}"
 }
 
+private data class QuickStartRequest(
+    val mode: RecordingMode,
+    val lens: VideoLens? = null,
+    val quality: VideoQuality? = null,
+)
+
 @Composable
 fun RecboxApp(
     openVideoPreview: Boolean = false,
@@ -142,6 +148,7 @@ fun RecboxApp(
     var videoSelection by remember { mutableStateOf<Pair<VideoLens, VideoQuality>?>(null) }
     var photoSelection by remember { mutableStateOf<VideoLens?>(null) }
     var pendingCallContact by remember { mutableStateOf<ContactItem?>(null) }
+    var pendingQuickStart by remember { mutableStateOf<QuickStartRequest?>(null) }
     val permissionsForMode = remember {
         { mode: RecordingMode ->
             buildList {
@@ -157,7 +164,25 @@ fun RecboxApp(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
-        if (pendingCallContact != null) {
+        if (pendingQuickStart != null) {
+            val request = pendingQuickStart!!
+            val granted = permissionsForMode(request.mode).all { permission ->
+                permissions[permission] == true || ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+            }
+            if (granted) {
+                when (request.mode) {
+                    RecordingMode.Video -> RecordingForegroundService.armVideo(
+                        context,
+                        request.lens ?: VideoLens.Back,
+                        request.quality ?: VideoQuality.FullHd,
+                    )
+                    RecordingMode.Photo -> RecordingForegroundService.armPhoto(context, request.lens ?: VideoLens.Back)
+                    RecordingMode.AmbientAudio -> RecordingForegroundService.armAudio(context)
+                    else -> Unit
+                }
+            }
+            pendingQuickStart = null
+        } else if (pendingCallContact != null) {
             val contact = pendingCallContact!!
             val requestedPermissions = permissionsForMode(RecordingMode.Call)
             val granted = requestedPermissions.all { permission ->
@@ -216,6 +241,23 @@ fun RecboxApp(
                 navController.navigate("recording/${mode.name}")
             }
             pendingMode = null
+        }
+    }
+
+    fun requestQuickStart(mode: RecordingMode, lens: VideoLens? = null, quality: VideoQuality? = null) {
+        val missing = permissionsForMode(mode).filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            when (mode) {
+                RecordingMode.Video -> RecordingForegroundService.armVideo(context, lens ?: VideoLens.Back, quality ?: VideoQuality.FullHd)
+                RecordingMode.Photo -> RecordingForegroundService.armPhoto(context, lens ?: VideoLens.Back)
+                RecordingMode.AmbientAudio -> RecordingForegroundService.armAudio(context)
+                else -> Unit
+            }
+        } else {
+            pendingQuickStart = QuickStartRequest(mode, lens, quality)
+            permissionLauncher.launch(missing.toTypedArray())
         }
     }
 
@@ -279,7 +321,7 @@ fun RecboxApp(
                 VideoSetupScreen(
                     onBack = { navController.popBackStack() },
                     onQuickStartChange = { enabled, lens, quality ->
-                        if (enabled) RecordingForegroundService.armVideo(context, lens, quality)
+                        if (enabled) requestQuickStart(RecordingMode.Video, lens, quality)
                         else RecordingForegroundService.stop(context)
                     },
                     onStart = { lens, quality ->
@@ -303,7 +345,7 @@ fun RecboxApp(
                 AudioSetupScreen(
                     onBack = { navController.popBackStack() },
                     onQuickStartChange = { enabled ->
-                        if (enabled) RecordingForegroundService.armAudio(context)
+                        if (enabled) requestQuickStart(RecordingMode.AmbientAudio)
                         else RecordingForegroundService.stop(context)
                     },
                     onStart = {
@@ -327,7 +369,7 @@ fun RecboxApp(
                 PhotoSetupScreen(
                     onBack = { navController.popBackStack() },
                     onQuickStartChange = { enabled, lens ->
-                        if (enabled) RecordingForegroundService.armPhoto(context, lens)
+                        if (enabled) requestQuickStart(RecordingMode.Photo, lens)
                         else RecordingForegroundService.stop(context)
                     },
                     onStart = { lens ->
